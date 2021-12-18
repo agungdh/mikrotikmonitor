@@ -1,7 +1,6 @@
 package com.bpkadlampungtengah.mikrotik.monitor.resource;
 
-import com.bpkadlampungtengah.mikrotik.monitor.domain.InterfaceMonitoring;
-import com.bpkadlampungtengah.mikrotik.monitor.domain.RequestQueue;
+import com.bpkadlampungtengah.mikrotik.monitor.domain.*;
 import lombok.extern.slf4j.Slf4j;
 import me.legrange.mikrotik.ApiConnection;
 import me.legrange.mikrotik.MikrotikApiException;
@@ -10,6 +9,8 @@ import org.springframework.core.env.Environment;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.validation.constraints.NotNull;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -25,8 +26,20 @@ public class MikrotikResource {
         Map<String, String> rs = this.mikrotik("/interface/monitor-traffic interface=ether10 once").get(0);
 
         InterfaceMonitoring data = new InterfaceMonitoring(
-                Long.valueOf(rs.get("tx-bits-per-second")),
-                Long.valueOf(rs.get("rx-bits-per-second"))
+                Long.valueOf(rs.get("tx-bits-per-second")) / 8,
+                Long.valueOf(rs.get("rx-bits-per-second"))/ 8
+        );
+
+        return ResponseEntity.ok().body(data);
+    }
+
+    @GetMapping("/iface/stat/indihome")
+    public ResponseEntity<InterfaceStat> indihomestat() throws MikrotikApiException {
+        Map<String, String> rs = this.mikrotik("/interface/ethernet/print stats where name=ether10").get(0);
+
+        InterfaceStat data = new InterfaceStat(
+                Long.valueOf(rs.get("tx-bytes")),
+                Long.valueOf(rs.get("rx-bytes"))
         );
 
         return ResponseEntity.ok().body(data);
@@ -37,21 +50,67 @@ public class MikrotikResource {
         Map<String, String> rs = this.mikrotik("/interface/monitor-traffic interface=ether1 once").get(0);
 
         InterfaceMonitoring data = new InterfaceMonitoring(
-                Long.valueOf(rs.get("tx-bits-per-second")),
-                Long.valueOf(rs.get("rx-bits-per-second"))
+                Long.valueOf(rs.get("tx-bits-per-second")) / 8,
+                Long.valueOf(rs.get("rx-bits-per-second")) / 8
+        );
+
+        return ResponseEntity.ok().body(data);
+    }
+
+    @GetMapping("/iface/stat/icon")
+    public ResponseEntity<InterfaceStat> iconstat() throws MikrotikApiException {
+        Map<String, String> rs = this.mikrotik("/interface/ethernet/print stats where name=ether1").get(0);
+
+        InterfaceStat data = new InterfaceStat(
+                Long.valueOf(rs.get("tx-bytes")),
+                Long.valueOf(rs.get("rx-bytes"))
         );
 
         return ResponseEntity.ok().body(data);
     }
 
     @GetMapping("/ppps")
-    public ResponseEntity<List<Map<String, String>>> ppps() throws MikrotikApiException {
-        return ResponseEntity.ok().body(this.mikrotik("/ppp/active/print"));
+    public ResponseEntity<List<Ppp>> ppps() throws MikrotikApiException {
+        List<Map<String, String>> rs = this.mikrotik("/ppp/active/print");
+
+        List<Ppp> ppps = new ArrayList<Ppp>();
+
+        for (int i = 1; i <= rs.size(); i++) {
+            Map<String, String> tempData = rs.get(i - 1);
+
+            Ppp ppp = new Ppp(
+                tempData.get("address"),
+                tempData.get("caller-id"),
+                tempData.get("service"),
+                tempData.get("name"),
+                tempData.get("comment"),
+                tempData.get("uptime")
+            );
+
+            ppps.add(ppp);
+        }
+
+        return ResponseEntity.ok().body(ppps);
     }
 
     @PostMapping("/queue")
-    public ResponseEntity<Map<String, String>> queue(@RequestBody RequestQueue request) throws MikrotikApiException {
-       return ResponseEntity.ok().body(this.mikrotik("/queue/simple/print where name=\"<" + request.getService() + "-" + request.getName() + ">\"").get(0));
+    public ResponseEntity<QueueMonitoring> queue(@RequestBody RequestQueue request) throws MikrotikApiException {
+        Map<String, String> rs = this.mikrotik("/queue/simple/print where name=\"<" + request.getService() + "-" + request.getName() + ">\"").get(0);
+
+        String rate = rs.get("rate");
+        String bytes = rs.get("bytes");
+
+        String[] rateData = rate.split("/");
+        String[] bytesData = bytes.split("/");
+
+        QueueMonitoring data = new QueueMonitoring(
+                Long.valueOf(bytesData[0]),
+                Long.valueOf(bytesData[1]),
+                Long.valueOf(rateData[0]),
+                Long.valueOf(rateData[0])
+        );
+
+        return ResponseEntity.ok().body(data);
     }
 
     private List<Map<String, String>> mikrotik(String query) throws MikrotikApiException {
