@@ -21,6 +21,69 @@ public class MikrotikResource {
     @Autowired
     Environment env;
 
+    @GetMapping("/")
+    public ResponseEntity<MikrotikStat> mikrotikStat() throws MikrotikApiException {
+        Map<String, String> indihomeRaw = this.mikrotik("/interface/monitor-traffic interface=ether10 once").get(0);
+        InterfaceMonitoring indihome = new InterfaceMonitoring(
+                Long.valueOf(indihomeRaw.get("tx-bits-per-second")) / 8,
+                Long.valueOf(indihomeRaw.get("rx-bits-per-second"))/ 8
+        );
+
+        Map<String, String> indihomeStatRaw = this.mikrotik("/interface/ethernet/print stats where name=ether10").get(0);
+        InterfaceStat indihomeStat = new InterfaceStat(
+                Long.valueOf(indihomeStatRaw.get("tx-bytes")),
+                Long.valueOf(indihomeStatRaw.get("rx-bytes"))
+        );
+
+        Map<String, String> iconRaw = this.mikrotik("/interface/monitor-traffic interface=ether1 once").get(0);
+        InterfaceMonitoring icon = new InterfaceMonitoring(
+                Long.valueOf(iconRaw.get("tx-bits-per-second")) / 8,
+                Long.valueOf(iconRaw.get("rx-bits-per-second")) / 8
+        );
+
+        Map<String, String> iconStatRaw = this.mikrotik("/interface/ethernet/print stats where name=ether1").get(0);
+        InterfaceStat iconStat = new InterfaceStat(
+                Long.valueOf(iconStatRaw.get("tx-bytes")),
+                Long.valueOf(iconStatRaw.get("rx-bytes"))
+        );
+
+        List<Map<String, String>> pppsRaw = this.mikrotik("/ppp/active/print");
+        List<PppStat> ppps = new ArrayList<PppStat>();
+        for (int i = 1; i <= pppsRaw.size(); i++) {
+            Map<String, String> tempData = pppsRaw.get(i - 1);
+
+            Ppp ppp = new Ppp(
+                    tempData.get("address"),
+                    tempData.get("caller-id"),
+                    tempData.get("service"),
+                    tempData.get("name"),
+                    tempData.get("comment"),
+                    tempData.get("uptime")
+            );
+
+            Map<String, String> queuesRaw = this.mikrotik("/queue/simple/print where name=\"<" + ppp.getService() + "-" + ppp.getName() + ">\"").get(0);
+
+            String rate = queuesRaw.get("rate");
+            String bytes = queuesRaw.get("bytes");
+
+            String[] rateData = rate.split("/");
+            String[] bytesData = bytes.split("/");
+
+            QueueMonitoring queueMonitoring = new QueueMonitoring(
+                    Long.valueOf(bytesData[0]),
+                    Long.valueOf(bytesData[1]),
+                    Long.valueOf(rateData[0]),
+                    Long.valueOf(rateData[1])
+            );
+
+            ppps.add(new PppStat(ppp, queueMonitoring));
+        }
+
+        MikrotikStat mikrotikStat = new MikrotikStat(indihome, icon, indihomeStat, iconStat, ppps);
+
+        return ResponseEntity.ok().body(mikrotikStat);
+    }
+
     @GetMapping("/iface/indihome")
     public ResponseEntity<InterfaceMonitoring> indihome() throws MikrotikApiException {
         Map<String, String> rs = this.mikrotik("/interface/monitor-traffic interface=ether10 once").get(0);
@@ -107,7 +170,7 @@ public class MikrotikResource {
                 Long.valueOf(bytesData[0]),
                 Long.valueOf(bytesData[1]),
                 Long.valueOf(rateData[0]),
-                Long.valueOf(rateData[0])
+                Long.valueOf(rateData[1])
         );
 
         return ResponseEntity.ok().body(data);
