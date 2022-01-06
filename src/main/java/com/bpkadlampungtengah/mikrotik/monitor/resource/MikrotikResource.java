@@ -20,6 +20,30 @@ public class MikrotikResource {
     @Autowired
     Environment env;
 
+    @GetMapping("/switch/icon")
+    public ResponseEntity<String> switchIcon() throws MikrotikApiException {
+        ApiConnection con = ApiConnection.connect(env.getProperty("mikrotik.host"));
+        con.login(env.getProperty("mikrotik.username"),env.getProperty("mikrotik.password"));
+
+        con.execute("/ip/route/disable numbers=0");
+
+        con.close();
+
+        return ResponseEntity.ok().body("");
+    }
+
+    @GetMapping("/switch/indihome")
+    public ResponseEntity<String> switchIndihome() throws MikrotikApiException {
+        ApiConnection con = ApiConnection.connect(env.getProperty("mikrotik.host"));
+        con.login(env.getProperty("mikrotik.username"),env.getProperty("mikrotik.password"));
+
+        con.execute("/ip/route/enable numbers=0");
+
+        con.close();
+
+        return ResponseEntity.ok().body("");
+    }
+
     @GetMapping("/vpn")
     public ResponseEntity<List<PppStat>> vpnData() throws MikrotikApiException {
         List<Map<String, String>> pppsRaw = this.getArrayData("/ppp/active/print");
